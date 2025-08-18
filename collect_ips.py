@@ -1,78 +1,44 @@
-import requests, re, os, json
+import requests
 from bs4 import BeautifulSoup
+import re
+import os
 
-# 1. 接口映射：url -> 真实数据地址
-API_MAP = {
-    "https://api.uouin.com/cloudflare.html":
-        "https://api.uouin.com/api/get_cdn_ip_list",      # IPv4
-    "https://stock.hostmonit.com/CloudFlareYes":
-        "https://stock.hostmonit.com/CloudFlareYes.json", # IPv4
-    "https://stock.hostmonit.com/CloudFlareYesV6":
-        "https://stock.hostmonit.com/CloudFlareYesV6.json" # IPv6
-}
+# 目标URL列表
+urls = ['https://api.uouin.com/cloudflare.html', 
+        'https://ip.164746.xyz'
+        ]
 
-# 2. 其余普通页面
-normal_urls = [
-    "https://ip.164746.xyz",
-    "https://www.wetest.vip/page/cloudflare/address_v6.html"
-]
+# 正则表达式用于匹配IP地址
+ip_pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
 
-ip_pattern = re.compile(r'''
-    \b
-    (?:
-        (?: (?:25[0-5]|2[0-4]\d|[01]?\d{1,2}) \.){3}
-        (?:25[0-5]|2[0-4]\d|[01]?\d{1,2})
-      |
-        (?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}
-      | (?:[0-9a-fA-F]{1,4}:)*::(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}
-      | ::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}
-      | (?:[0-9a-fA-F]{1,4}:){1,7}:
-    )
-    \b
-''', re.VERBOSE)
-
-seen = set()
+# 检查ip.txt文件是否存在,如果存在则删除它
 if os.path.exists('ip.txt'):
     os.remove('ip.txt')
 
-with open('ip.txt', 'w', encoding='utf-8') as f:
-    # ---- 处理 Ajax 接口 ----
-    for display_url, api_url in API_MAP.items():
-        try:
-            r = requests.get(api_url, timeout=10)
-            r.raise_for_status()
-            try:
-                data = r.json()          # uouin 返回 {"data":[...]}
-                if 'data' in data:
-                    raw_list = data['data']
-                else:
-                    raw_list = data      # hostmonit 直接返回 [...]
-            except ValueError:
-                raw_list = []            # 兜底
-            ips = [ip for item in raw_list
-                   for ip in ip_pattern.findall(str(item))]
-            new_ips = [ip for ip in ips if ip not in seen]
-            for ip in new_ips:
-                seen.add(ip)
-                f.write(ip + '\n')
-            print(f"[{display_url}] 抓到 {len(new_ips)} 个新 IP")
-        except Exception as e:
-            print(f"[ERROR] {display_url} -> {e}")
+# 创建一个文件来存储IP地址
+with open('ip.txt', 'w') as file:
+    for url in urls:
+        # 发送HTTP请求获取网页内容
+        response = requests.get(url)
+        
+        # 使用BeautifulSoup解析HTML
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 根据网站的不同结构找到包含IP地址的元素
+        if url == 'https://api.uouin.com/cloudflare.html':
+            elements = soup.find_all('tr')
+        elif url == 'https://ip.164746.xyz':
+            elements = soup.find_all('tr')
+        else:
+            elements = soup.find_all('li')
+        
+        # 遍历所有元素,查找IP地址
+        for element in elements:
+            element_text = element.get_text()
+            ip_matches = re.findall(ip_pattern, element_text)
+            
+            # 如果找到IP地址,则写入文件
+            for ip in ip_matches:
+                file.write(ip + '\n')
 
-    # ---- 处理普通网页 ----
-    for url in normal_urls:
-        try:
-            r = requests.get(url, timeout=10)
-            r.raise_for_status()
-            soup = BeautifulSoup(r.text, 'html.parser')
-            containers = soup.find_all('tr') if 'wetest.vip' in url else soup.find_all('tr')
-            ips = [ip for tag in containers for ip in ip_pattern.findall(tag.get_text())]
-            new_ips = [ip for ip in ips if ip not in seen]
-            for ip in new_ips:
-                seen.add(ip)
-                f.write(ip + '\n')
-            print(f"[{url}] 抓到 {len(new_ips)} 个新 IP")
-        except Exception as e:
-            print(f"[ERROR] {url} -> {e}")
-
-print(f"全部完成，共 {len(seen)} 个 IP 写入 ip.txt")
+print('IP地址已保存到ip.txt文件中。')
