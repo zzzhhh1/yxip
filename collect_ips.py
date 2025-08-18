@@ -3,19 +3,19 @@ from bs4 import BeautifulSoup
 import re
 import os
 
-# ✅ 1. 只保留纯 URL
 urls = [
     "https://api.uouin.com/cloudflare.html",
     "https://ip.164746.xyz",
-    "https://www.wetest.vip/page/cloudflare/address_v6.html"
+    "https://www.wetest.vip/page/cloudflare/address_v6.html",
+    "https://stock.hostmonit.com/CloudFlareYes",      # IPv4
+    "https://stock.hostmonit.com/CloudFlareYesV6"     # IPv6
 ]
 
-# 2. 正则不变
 ip_pattern = re.compile(r'''
     \b
     (?:
         (?: (?:25[0-5]|2[0-4]\d|[01]?\d{1,2}) \.){3}
-        (?:25[0-5]|2[0-4]\d|[01]?\d{1,2})
+        (?:25[0-5]|2[0-4]\d|[01]?\d{1,2})                # IPv4
       |
         (?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}
       | (?:[0-9a-fA-F]{1,4}:)*::(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}
@@ -36,12 +36,10 @@ with open('ip.txt', 'w', encoding='utf-8') as f:
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, 'html.parser')
 
-            # 3. 根据站点结构选择容器
+            # 按站点结构选容器
             if 'api.uouin.com' in url:
-                # 该站是 <li> 列表
                 containers = soup.find_all('li')
             else:
-                # 另外两个是表格
                 containers = soup.find_all('tr')
 
             for tag in containers:
