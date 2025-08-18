@@ -3,33 +3,32 @@ from bs4 import BeautifulSoup
 import re
 import os
 
-# 目标 URL
+# ✅ 1. 只保留纯 URL
 urls = [
     "https://api.uouin.com/cloudflare.html",
-    "https://ip.164746.xyz"
+    "https://ip.164746.xyz",
     "https://www.wetest.vip/page/cloudflare/address_v6.html"
 ]
 
-# ✅ 一个正则同时匹配合法 IPv4 和 IPv6（压缩/完整写法都支持）
+# 2. 正则不变
 ip_pattern = re.compile(r'''
     \b
     (?:
         (?: (?:25[0-5]|2[0-4]\d|[01]?\d{1,2}) \.){3}
-        (?:25[0-5]|2[0-4]\d|[01]?\d{1,2})                # IPv4
+        (?:25[0-5]|2[0-4]\d|[01]?\d{1,2})
       |
-        (?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}          # IPv6 完整写法
-      | (?:[0-9a-fA-F]{1,4}:)*::(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}  # IPv6 压缩写法
+        (?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}
+      | (?:[0-9a-fA-F]{1,4}:)*::(?:[0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}
       | ::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}
       | (?:[0-9a-fA-F]{1,4}:){1,7}:
     )
     \b
 ''', re.VERBOSE)
 
-# 删除旧文件
 if os.path.exists('ip.txt'):
     os.remove('ip.txt')
 
-seen = set()          # 去重用
+seen = set()
 with open('ip.txt', 'w', encoding='utf-8') as f:
     for url in urls:
         try:
@@ -37,9 +36,16 @@ with open('ip.txt', 'w', encoding='utf-8') as f:
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, 'html.parser')
 
-            for tr in soup.find_all('tr'):
-                for ip in ip_pattern.findall(tr.get_text()):
-                    # 简单合法性二次校验（可选）
+            # 3. 根据站点结构选择容器
+            if 'api.uouin.com' in url:
+                # 该站是 <li> 列表
+                containers = soup.find_all('li')
+            else:
+                # 另外两个是表格
+                containers = soup.find_all('tr')
+
+            for tag in containers:
+                for ip in ip_pattern.findall(tag.get_text()):
                     if ip not in seen:
                         seen.add(ip)
                         f.write(ip + '\n')
